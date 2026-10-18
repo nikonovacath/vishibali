@@ -1,0 +1,1063 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Вышибалы</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&family=Sawarabi+Gothic&display=swap">
+<style>
+/* Same look as «Уголки»: header row, then the framed board on the left and a 392px column of cards on the right; stacks on phones */
+:root{
+  --bg:#f5eed9; --card:#fcf9f1; --line:#d5cfbe; --ink:#000; --text:#575757; --muted:#9c9c9c;
+  --frame:#e8c78a; --frame-ink:#865931; --sq-light:#e8d3ad; --sq-dark:#a8774b; --sq-ink:#3f2c09; --ring:#d99a1e; --yellow:#ffca57; --hint:#efece5; --disabled:#ccc4b1; --six:#4c8810; --danger:#c0392b;
+  --f-head:"Sawarabi Gothic","Helvetica Neue",Arial,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  --f-lbl:Helvetica,Arial,sans-serif;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%;overflow-x:clip}
+body{overflow-x:clip} /* a piece flying off the board never makes the page scroll sideways */
+[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--f-mono);font-weight:500;font-size:14px;line-height:1.43;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:16px 40px}
+.wrap{max-width:940px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+header{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.head-actions{display:flex;align-items:center;gap:8px}
+.icon-btn{width:42px;height:42px;padding:0;display:flex;align-items:center;justify-content:center;border:1px solid var(--line);border-radius:12px;background:transparent}
+.icon-btn img{display:block;width:20px;height:20px}
+.icon-btn[aria-expanded="true"]{border-color:#000}
+.menu-wrap{position:relative}
+.menu{position:absolute;right:0;top:calc(100% + 6px);z-index:20;background:var(--card);border:1px solid #000;border-radius:16px;padding:8px;box-shadow:0 3px 11px -2px rgba(0,0,0,.25)}
+.menu-item{display:block;width:100%;border:0;border-radius:10px;padding:16px 17px;text-align:left;white-space:nowrap}
+h1{font-family:var(--f-head);font-weight:400;font-size:24px;line-height:26px;letter-spacing:-.03em;margin:0}
+.sub{margin:2px 0 0;font-size:12px;line-height:19px;color:var(--text);text-transform:uppercase}
+.game{display:flex;gap:15px;align-items:flex-start;justify-content:center}
+
+/* board */
+.board-box{flex:1 1 533px;min-width:0;max-width:533px;display:flex;flex-direction:column;align-items:center;gap:16px}
+.frame{width:100%;background:var(--frame);border-radius:16px;display:grid;grid-template-columns:14.33px minmax(0,1fr) 14.33px;grid-template-rows:14.33px auto 14.33px}
+.lbl{display:flex;font:700 8.6px var(--f-lbl);color:var(--frame-ink);text-transform:uppercase}
+.lbl span{flex:1;display:flex;align-items:center;justify-content:center}
+.lbl.files{grid-column:2}
+.lbl.ranks{flex-direction:column;grid-row:2}
+.board{grid-column:2;grid-row:2;display:grid;grid-template-columns:repeat(8,minmax(0,1fr));grid-template-rows:repeat(8,minmax(0,1fr));aspect-ratio:1;
+  border:1.43px solid var(--frame-ink);border-radius:10px;overflow:hidden}
+.sq{min-width:0;min-height:0}
+.sq.l{background-color:var(--sq-light)} .sq.d{background-color:var(--sq-dark)}
+/* pieces live on a free layer over the squares: positions are in board units, 0..8 from the bottom-left corner */
+.field{grid-column:2;grid-row:2;position:relative;margin:1.43px;z-index:5;user-select:none;-webkit-user-select:none}
+.field.play{touch-action:none}
+.pc{aspect-ratio:1;border-radius:50%;background:var(--fill);border:3px solid var(--edge);flex:none;position:relative;
+  box-shadow:0 2px 0 rgba(0,0,0,.35),inset 0 -4px 0 rgba(0,0,0,.15)}
+.pc::after{content:"";position:absolute;inset:22%;border-radius:50%;border:2px solid var(--edge);opacity:.45}
+.field .pc{position:absolute;left:0;top:0;width:9%;transform:translate(-50%,-50%);z-index:2}
+.field .pc.can{cursor:grab;outline:3px solid var(--ring);outline-offset:2px;animation:pulse 1.4s infinite}
+.field.dragging .pc.can{animation:none;outline-color:transparent}
+.field .pc.grab{cursor:grabbing;outline:4px solid var(--ring);outline-offset:2px;animation:none;z-index:3}
+.field .pc.fall{opacity:0;transform:translate(-50%,-50%) scale(.7);transition:opacity .7s ease-in,transform .7s ease-in}
+@keyframes pulse{50%{outline-color:transparent}}
+.aim{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible;z-index:6}
+/* pieces left, under the board */
+.tray{width:100%;display:flex;justify-content:space-between;align-items:center;gap:10px 24px;flex-wrap:wrap}
+.tray:empty{display:none}
+.orow{display:flex;align-items:center;gap:8px}
+.orow .nm{font-size:12px;line-height:18px;color:var(--text);text-transform:uppercase;white-space:nowrap}
+.slots{display:flex;gap:4px;align-items:center}
+.mini{width:18px;height:18px;border-radius:50%;background:var(--fill);border:2px solid var(--edge);box-shadow:0 1px 0 rgba(0,0,0,.3);flex:none}
+.mini.out{background:transparent;border:1.5px dashed rgba(0,0,0,.28);box-shadow:none}
+
+/* side column */
+.side{flex:0 1 392px;min-width:300px;max-width:392px;display:flex;flex-direction:column;gap:12px}
+.side-inner{display:flex;flex-direction:column;gap:12px}
+.side-inner:empty{display:none}
+@media (pointer:coarse){html body input[type="text"]{font-size:16px}}
+.card{border:1px solid var(--line);border-radius:16px;padding:16px 25px;display:flex;flex-direction:column;gap:16px}
+.card.main{background:var(--card);padding:24px 25px;gap:24px}
+.card.turn-card{background:var(--card);border:2px solid #000;padding:20px 25px;gap:20px}
+.card.turn-card.calm{border:1px solid #b1b1b1;padding:21px 26px}
+.card-title{font-family:var(--f-head);font-weight:400;font-size:24px;line-height:26px;letter-spacing:-.03em;margin:0}
+.rule{height:1px;background:var(--line);border:0;margin:0}
+.rows{display:flex;flex-direction:column;gap:16px}
+.row{display:flex;align-items:center;gap:20px}
+.row .lab{width:76px;flex:none;color:var(--text);text-transform:uppercase;line-height:20px}
+.seg{display:flex;gap:10px;flex-wrap:nowrap}
+.seg button{padding-inline:14px}
+.card.main{container-type:inline-size}
+@container (max-width:334px){.row{flex-direction:column;align-items:stretch;gap:8px}.row .lab{width:auto}.row .seg{align-self:flex-start}}
+button{font:inherit;cursor:pointer;color:#000;background:transparent;border:1px solid #000;border-radius:12px;padding:8px 18px;line-height:24px;text-transform:uppercase;transition:background-color .12s,color .12s}
+button[aria-pressed="true"]{background:#000;color:#fff}
+button:not(:disabled):active{transform:translateY(1px)}
+@media (hover:hover) and (pointer:fine){
+  .field .pc.can:hover{transform:translate(-50%,-50%) scale(1.08)}
+  button:not(:disabled):hover{background:rgba(0,0,0,.06)}
+  button[aria-pressed="true"]:hover{background:#2b2b2b}
+  .btn-main:not(:disabled):hover{background:#ffbd2e}
+  input[type="text"]:hover{background:rgba(0,0,0,.03)}
+  details.card summary:hover .chev{opacity:.6}
+}
+button:focus-visible,input:focus-visible,summary:focus-visible{outline:3px solid var(--yellow);outline-offset:2px}
+.btn-main{background:var(--yellow);width:100%;padding:8px 42px}
+.btn-main:disabled{background:var(--disabled);opacity:.4;cursor:default}
+input[type="text"]{font:inherit;text-transform:uppercase;color:#000;background:transparent;border:1px solid #000;border-radius:12px;padding:8px 18px;line-height:24px;width:100%;min-width:0;transition:background-color .12s}
+input[type="text"]::placeholder{color:rgba(0,0,0,.37)}
+.note{font-size:12px;line-height:18px;color:var(--text);text-transform:uppercase;text-align:center;margin:0}
+.stack{display:flex;flex-direction:column;gap:12px}
+
+.turn{display:flex;align-items:center;gap:11px;font-family:var(--f-head);font-size:20px;line-height:24px;letter-spacing:-.03em}
+.round-lab{font-size:12px;line-height:18px;color:var(--text);text-transform:uppercase;margin:-8px 0 0}
+.round-lab b{color:#000;font-weight:500;text-decoration:underline 1.5px var(--yellow);text-underline-offset:3px}
+.ico{width:var(--s,20px);height:var(--s,20px);border-radius:50%;background:var(--fill);border:3px solid var(--edge);flex:none;box-shadow:0 1px 0 rgba(0,0,0,.3)}
+.hint{background:var(--hint);border-radius:10px;padding:12px;font-size:12px;line-height:18px;color:var(--text);text-transform:uppercase}
+.hint b{color:inherit;font-weight:500}
+
+.players{display:flex;flex-direction:column;gap:12px}
+.prow{display:flex;align-items:center;gap:8px;font-size:12px;line-height:18px;text-transform:uppercase;color:var(--text)}
+.prow .nm{min-width:50px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.prow.active .nm{color:#000;text-decoration:underline 1.5px var(--yellow);text-underline-offset:3px}
+.prow .st{flex:1;text-align:right;color:var(--muted);white-space:nowrap}
+
+details.card{gap:0}
+details.card summary{list-style:none;display:flex;align-items:center;justify-content:space-between;cursor:pointer;font-family:var(--f-head);font-size:18px;line-height:24px;letter-spacing:-.03em}
+details.card summary::-webkit-details-marker{display:none}
+details.card summary .chev{width:24px;height:24px;background:url(assets/chevron.svg) center/contain no-repeat;transition:transform .15s}
+details.card[open] summary .chev{transform:scaleY(-1)}
+details.card[open] summary{padding-bottom:16px;border-bottom:1px solid var(--line);margin-bottom:16px}
+.goal{margin:0 0 12px;color:var(--text);text-transform:uppercase;line-height:20px}
+.rules{margin:0;padding-left:21px;gap:8px;color:var(--text);text-transform:uppercase;line-height:20px;display:flex;flex-direction:column}
+.log{margin:0;padding:0;list-style:none;font-size:12px;line-height:18px;color:var(--text);text-transform:uppercase;display:flex;flex-direction:column;gap:4px;max-height:200px;overflow:auto}
+.log li:first-child{color:#000}
+.result-card{background:var(--card);border:2px solid #000;padding:20px 25px;gap:20px}
+.result-card.win{border-color:var(--six)}
+.result-title{display:block;margin:0}
+.result-card .prow .st{color:var(--text)}
+.prow .free{color:var(--muted)}
+.err{font-size:12px;line-height:18px;color:var(--danger);text-transform:uppercase;margin:0}
+.big{font-family:var(--f-head);font-size:32px;line-height:36px}
+.invite{display:flex;gap:8px;flex-wrap:wrap}
+.invite input{flex:1 1 180px;text-transform:none;font-size:12px}
+/* chat (games with friends): built once and only its message list is refreshed, so typing is never interrupted */
+.chat{gap:12px}
+.chat-list{list-style:none;margin:0;padding:0 2px 0 0;display:flex;flex-direction:column;gap:10px;max-height:240px;overflow-y:auto}
+.chat-empty{font-size:12px;line-height:18px;color:var(--muted);text-transform:uppercase}
+.msg{display:flex;flex-direction:column;gap:2px}
+.msg-head{display:flex;align-items:center;gap:6px;font-size:12px;line-height:18px;text-transform:uppercase;color:var(--text)}
+.msg-head .ico{--s:14px;border-width:2px}
+.msg-time{margin-left:auto;color:var(--muted)}
+.msg-text{font-size:14px;line-height:20px;color:#000;overflow-wrap:anywhere;padding-left:20px}
+.chat-form{display:flex;gap:8px;align-items:center}
+.chat-form input{flex:1;min-width:0;height:42px}
+#chatInput{text-transform:none}
+.chat-form .chat-send{width:42px;height:42px;padding:0;flex:none;font-size:18px;line-height:1}
+.emoji-wrap{position:relative;flex:none}
+.emoji-btn{font-size:18px;line-height:1}
+.emoji-pop{position:absolute;right:0;bottom:calc(100% + 6px);z-index:20;background:var(--card);border:1px solid #000;border-radius:16px;padding:8px;box-shadow:0 3px 11px -2px rgba(0,0,0,.25);display:grid;grid-template-columns:repeat(6,36px);gap:4px}
+.emoji-pop button{width:36px;height:36px;padding:0;border:0;border-radius:10px;font-size:20px;line-height:1;text-transform:none}
+@media (pointer:coarse){.emoji-wrap{display:none}}
+.chat-btn{position:relative}
+.badge{position:absolute;left:22px;top:5.5px;min-width:14px;height:14px;padding:0 2px;border-radius:99px;background:var(--yellow);color:#000;font:600 8px/14px var(--f-mono);letter-spacing:-.04em;text-align:center}
+.chat-head{display:flex;align-items:center;justify-content:space-between}
+.card-sub{font-family:var(--f-head);font-weight:400;font-size:18px;line-height:24px;letter-spacing:-.03em;margin:0}
+.chat-close{display:none;border:0;padding:0;width:32px;height:32px;font-size:24px;line-height:1;text-transform:none}
+.sheet-backdrop{position:fixed;inset:0;z-index:39;background:rgba(0,0,0,.25)}
+/* phones: the chat leaves the column and becomes a sheet opened from the header button */
+@media (max-width:680px){
+  .chat-btn:not([hidden]){display:flex}
+  .chat{position:fixed;left:0;right:0;bottom:0;z-index:40;max-height:75vh;margin:0;border-radius:16px 16px 0 0;border:1px solid #000;border-bottom:0;background:var(--card);
+    padding:16px max(16px,env(safe-area-inset-right,0px)) calc(16px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));
+    box-shadow:0 -6px 24px rgba(0,0,0,.18);transform:translateY(105%);transition:transform .25s cubic-bezier(.2,.8,.3,1);visibility:hidden}
+  .chat.open{transform:none;visibility:visible}
+  .chat-list{max-height:none;flex:1 1 auto;min-height:0}
+  .chat-close{display:block}
+}
+@media (min-width:681px){.chat-btn{display:none!important}.sheet-backdrop{display:none!important}}
+@media (max-width:680px){.game{flex-direction:column;align-items:stretch}.board-box,.side{max-width:none;min-width:0;flex:none;width:100%}}
+@media (prefers-reduced-motion:reduce){.field .pc.can{animation:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div><h1>Вышибалы</h1><p class="sub">В простонародье «Чапаев»</p></div>
+    <div class="head-actions">
+      <button class="icon-btn" id="soundBtn" type="button"><img id="soundIco" src="assets/sound-on.svg" width="20" height="20" alt=""></button>
+      <button class="icon-btn" id="musicBtn" type="button"><img id="musicIco" src="assets/music-on.svg" width="20" height="20" alt=""></button>
+      <button class="icon-btn chat-btn" id="chatBtn" type="button" aria-label="Чат" aria-controls="chat" aria-expanded="false" hidden><img src="assets/chat.svg" width="20" height="20" alt=""><span class="badge" id="chatBadge" hidden></span></button>
+      <div class="menu-wrap" id="menuWrap" hidden>
+        <button class="icon-btn" id="menuBtn" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="menu" aria-label="Меню"><img src="assets/menu-dots.svg" width="20" height="20" alt=""></button>
+        <div class="menu" id="menu" role="menu" hidden><button class="menu-item" id="topNew" type="button" role="menuitem">Начать новую игру</button></div>
+      </div>
+    </div>
+  </header>
+  <div class="game">
+    <div class="board-box">
+      <div class="frame">
+        <span></span><div class="lbl files"></div><span></span>
+        <div class="lbl ranks"></div>
+        <div class="board" id="board"></div>
+        <div class="field" id="field"><svg class="aim" id="aim" viewBox="0 0 8 8" aria-hidden="true"></svg></div>
+        <div class="lbl ranks"></div>
+        <span></span><div class="lbl files"></div><span></span>
+      </div>
+    </div>
+    <div class="side">
+      <div class="side-inner" id="side"></div>
+      <section class="card chat" id="chat" hidden aria-label="Чат">
+        <div class="chat-head"><p class="card-sub">Чат</p><button type="button" class="chat-close" id="chatClose" aria-label="Закрыть чат">×</button></div>
+        <ul class="chat-list" id="chatList" aria-live="polite"></ul>
+        <form class="chat-form" id="chatForm" autocomplete="off">
+          <input type="text" id="chatInput" maxlength="300" placeholder="Напиши сообщение" aria-label="Сообщение">
+          <div class="emoji-wrap">
+            <button type="button" class="icon-btn emoji-btn" id="emojiBtn" aria-label="Эмодзи" aria-expanded="false">🙂</button>
+            <div class="emoji-pop" id="emojiPop" hidden></div>
+          </div>
+          <button type="submit" class="btn-main chat-send" id="chatSend" aria-label="Отправить" disabled>→</button>
+        </form>
+      </section>
+      <div class="side-inner" id="sideRest"></div>
+    </div>
+    <div class="sheet-backdrop" id="sheetBackdrop" hidden></div>
+  </div>
+</div>
+<script>
+const COLORS=[
+  {name:'белые',fill:'#f3efe6',edge:'#3b2f25'},
+  {name:'чёрные',fill:'#2a2522',edge:'#d6ccbb'},
+];
+const LEVELS={easy:'Лёгкий',mid:'Средний',ded:'Дед'};
+const wait=ms=>new Promise(r=>setTimeout(r,ms));
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const store={get(k){try{return localStorage.getItem(k)||''}catch(e){return ''}},set(k,v){try{localStorage.setItem(k,v)}catch(e){}}};
+const plural=(n,a,b,c)=>{const m=n%10,h=n%100;return m===1&&h!==11?a:m>=2&&m<=4&&(h<10||h>=20)?b:c;};
+
+/* ---------- online (Firebase, same project as «Уголки», rooms under chapaev/) ---------- */
+const FB_CONFIG={
+  apiKey:"AIzaSyDMcyQPFdDdbM4PUl5qbpV8gRTxMJnVp4g",
+  authDomain:"ugolki-d70b8.firebaseapp.com",
+  databaseURL:"https://ugolki-d70b8-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId:"ugolki-d70b8",
+  storageBucket:"ugolki-d70b8.firebasestorage.app",
+  messagingSenderId:"90178556292",
+  appId:"1:90178556292:web:a8fde49939c553e8a4cdd1",
+};
+const FB_SDK='https://www.gstatic.com/firebasejs/10.12.2/';
+const ROOT='chapaev';
+const params=new URLSearchParams(location.search);
+let fb=null;      // firebase handles once connected
+let NET=null;     // {code, seat, data} while in an online room
+let firstState=true,replaying=false,pending=null;
+
+async function connect(){
+  if(fb)return fb;
+  const [appM,authM,dbM]=await Promise.all(['firebase-app.js','firebase-auth.js','firebase-database.js'].map(f=>import(FB_SDK+f)));
+  const app=appM.initializeApp(FB_CONFIG);
+  const auth=authM.getAuth(app);
+  // ?tab gives each browser tab its own player, handy for trying the game alone
+  if(params.has('tab'))await authM.setPersistence(auth,authM.browserSessionPersistence);
+  const cred=await authM.signInAnonymously(auth);
+  fb={db:dbM.getDatabase(app),uid:cred.user.uid,...dbM};
+  return fb;
+}
+const rref=(path)=>fb.ref(fb.db,ROOT+'/'+(NET?NET.code:params.get('room'))+(path?'/'+path:''));
+function makeCode(){const a='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';let s='';for(let i=0;i<6;i++)s+=a[Math.floor(Math.random()*a.length)];return s;}
+function roomURL(code){const u=new URL(location.href);u.search='';u.searchParams.set('room',code);if(params.has('tab'))u.searchParams.set('tab','');return u.toString().replace('tab=','tab');}
+async function createRoom(name){
+  const f=await connect();const code=makeCode();
+  await f.set(f.ref(f.db,`${ROOT}/${code}/meta`),{size:2,host:f.uid,created:f.serverTimestamp()});
+  history.replaceState(null,'',roomURL(code));params.set('room',code);
+  await joinRoom(code,name);
+}
+async function roomInfo(code){
+  const f=await connect();
+  const v=(await f.get(f.ref(f.db,`${ROOT}/${code}`))).val();
+  return v&&v.meta?v:null;
+}
+async function joinRoom(code,name){
+  const f=await connect();
+  const v=await roomInfo(code);
+  if(!v)throw new Error('notfound');
+  const seats=v.seats||{};
+  let seat=Object.keys(seats).find(i=>seats[i]===f.uid);
+  if(seat==null){
+    for(let i=0;i<2&&seat==null;i++){
+      if(seats[i])continue;
+      try{const r=await f.runTransaction(f.ref(f.db,`${ROOT}/${code}/seats/${i}`),cur=>cur?undefined:f.uid);if(r.committed)seat=i;}catch(e){}
+    }
+    if(seat==null)throw new Error('full');
+    await f.set(f.ref(f.db,`${ROOT}/${code}/players/${f.uid}`),{name,seat:+seat});
+  }
+  enterRoom(code,+seat);
+}
+function enterRoom(code,seat){
+  clearTimeout(botTimer);loopId++;
+  NET={code,seat,data:null};firstState=true;replaying=false;pending=null;G=null;screen='lobby';
+  NET.off=fb.onValue(fb.ref(fb.db,`${ROOT}/${code}`),s=>onRoom(s.val()||{}));
+  render();
+}
+function leaveRoom(){
+  chatKey='';chatSeenCount=-1;chatList.innerHTML='';
+  if(NET&&NET.off)NET.off();
+  NET=null;params.delete('room');
+  const u=new URL(location.href);if(!u.searchParams.has('room'))return;
+  u.searchParams.delete('room');history.replaceState(null,'',u.toString().replace('tab=','tab'));
+}
+function roomPlayers(){ // seated players in seat order: [{uid,name,seat}]
+  const p=(NET.data&&NET.data.players)||{};
+  return Object.entries(p).map(([uid,v])=>({uid,name:v.name,seat:v.seat})).sort((a,b)=>a.seat-b.seat);
+}
+function onRoom(v){
+  NET.data=v;renderChat();
+  if(!v.state){
+    G=null;screen='lobby';
+    const list=roomPlayers();
+    // the host sets up the board once both have sat down; the host (seat 0, white) starts the match
+    if(v.meta&&v.meta.host===fb.uid&&list.length>=2)startOnline(list);
+    render();return;
+  }
+  const S=normalize(v.state);
+  if(G&&S.ver===G.ver&&S.by===G.by){ // nothing new on the board (often our own write coming back); only rematch votes may have changed
+    G.rematch=S.rematch;
+    if(G.phase==='over'&&votes()>=2&&NET.seat===0){restartOnline();return;}
+    if(G.phase==='over')render();
+    return;
+  }
+  if(G&&S.ver<G.ver)return;
+  if(replaying){pending=S;return;}  // the other player's shot is still rolling here: show the result once it settles
+  applyState(S);
+}
+function applyState(S){
+  const old=G;G=S;screen='game';
+  if(firstState){
+    firstState=false;
+    // reloaded in the middle of your own shot: settle it straight away
+    if(G.phase==='moving'&&G.shot&&G.shot.p===NET.seat){
+      G.pieces=simulate(G.pieces,G.shot.i,G.shot.vx,G.shot.vy);buildPieces();resolveShot();return;
+    }
+  }
+  if(G.phase==='moving'&&G.shot&&G.shot.p!==NET.seat&&(!old||old.shotSeq!==G.shotSeq)){
+    // the other player has just shot: play the same shot back here
+    buildPieces();const a=G.pieces[G.shot.i];a.vx=G.shot.vx;a.vy=G.shot.vy;
+    replaying=true;sfx('step');render();runLoop(true);return;
+  }
+  buildPieces();render();
+  const M=NET.seat;
+  if(old){
+    if(G.phase==='over'&&old.phase!=='over')sfx(G.winner===M?'win':'lose');
+    else if(G.phase==='roundover'&&old.phase!=='roundover'){if(G.lastRound.w===M)sfx('home');}
+    else if(G.phase==='aim'&&G.turn===M&&!(old.phase==='aim'&&old.turn===M))sfx('turn');
+  }
+  if(G.phase==='over'&&votes()>=2&&M===0)restartOnline();
+}
+function replayDone(){
+  replaying=false;
+  if(pending){const p=pending;pending=null;applyState(p);}
+}
+function onlineMatch(list){
+  G={players:list.map(p=>({name:p.name,bot:false,lv:0})),level:null,turn:0,round:1,log:[],phase:'aim',again:false,lostBy:null,ver:G?G.ver:0,rematch:{}};
+  setupRound();
+  addLog(`Раунд 1. Первым ходит ${who(cur())}.`);
+  screen='game';sync();
+}
+function startOnline(list){onlineMatch(list);}
+function restartOnline(){onlineMatch(G.players);}
+const votes=()=>Object.values(G.rematch||{}).filter(Boolean).length;
+function againButton(){
+  if(!NET)return '<button class="btn-main" id="again">Сыграть ещё</button>';
+  const n=votes();
+  if(G.rematch&&G.rematch[NET.seat])return `<button class="btn-main" id="again" disabled>Ждём соперника · ${n}/2</button>`;
+  return `<button class="btn-main" id="again">Сыграть ещё</button>${n?'<p class="note">Соперник хочет сыграть ещё</p>':''}`;
+}
+// everything about the match lives in one object; online it is written as a whole after each change
+function pack(g){
+  const o=JSON.parse(JSON.stringify(g));
+  o.pieces=g.pieces.map(a=>({p:a.p,x:a.x,y:a.y,out:!!a.out}));
+  return o;
+}
+function normalize(s){ // Firebase drops empty arrays and nulls; put them back
+  s.log=s.log||[];s.rematch=s.rematch||{};s.again=!!s.again;s.lostBy=s.lostBy??null;s.ver=s.ver||0;
+  s.pieces=(s.pieces||[]).map(a=>({p:a.p,x:a.x,y:a.y,out:!!a.out,vx:0,vy:0}));
+  if(s.shot)s.shot.before=s.pieces.map((_,i)=>!!(s.shot.before||[])[i]);
+  s.players=(s.players||[]).map(p=>({name:p.name,bot:!!p.bot,lv:p.lv||0}));
+  return s;
+}
+function sync(){
+  if(G)G.ver=(G.ver||0)+1;
+  render();
+  if(NET&&G){G.by=fb.uid;fb.set(rref('state'),pack(G));}
+}
+function netError(err){
+  const c=(err&&(err.code||err.message))||'';
+  if(c==='notfound')return 'Такой игры нет. Проверь ссылку.';
+  if(c==='full')return 'В этой игре уже двое.';
+  if(/PERMISSION_DENIED|permission/i.test(c))return 'Сервер не пускает в игру: в Firebase не обновлены правила для «Вышибал».';
+  if(/auth\/(admin-restricted|operation-not-allowed|configuration-not-found)/.test(c))return 'Онлайн-режим ещё не включён в настройках сервера (анонимный вход в Firebase).';
+  if(/network|Failed to fetch|import/i.test(c))return 'Нет связи с сервером игры. Проверь интернет и попробуй ещё раз.';
+  return 'Не удалось подключиться к игре. '+c;
+}
+
+/* ---------- physics ---------- */
+// Board units: one square = 1, the board is 0..8 on both axes, y grows upwards (rank 1 at the bottom).
+// A fixed time step keeps every shot deterministic, so the bot can try shots on a copy and the real one plays out exactly the same.
+const R=0.36;      // piece radius
+const MU=3.6;      // friction: speed lost per second
+const E=0.5;       // bounciness of a hit: lower = the shooter keeps more of its speed and can fly on after the target
+const DT=1/200;    // physics step
+const VMAX=15;     // speed of a full-power flick (slides about 30 squares on an empty board)
+const PULL=2.4;    // how far back you pull for full power, in squares
+const AIM=1.1;     // aim line length: direction only, deliberately short
+const SWEEP=Math.PI/3; // the arrow swings ±60° around the direction you pull
+const SWEEP_T=1.6;     // seconds for one full swing there and back
+// the swing moves at an even speed (a triangle wave), so the middle is no easier to catch than the edges
+function sweepOff(t){const ph=((t/SWEEP_T)%1+1)%1;return(ph<0.5?ph*4-1:3-ph*4)*SWEEP;}
+function physStep(ps,ev){
+  for(const a of ps){
+    if(!a.vx&&!a.vy)continue; // pieces already off the board keep sliding while they fade, but hit nothing
+    const s=Math.hypot(a.vx,a.vy),ns=s-MU*DT;
+    if(ns<0.01){a.vx=a.vy=0;}else{a.vx*=ns/s;a.vy*=ns/s;}
+    a.x+=a.vx*DT;a.y+=a.vy*DT;
+  }
+  for(let i=0;i<ps.length;i++){const a=ps[i];if(a.out)continue;
+    for(let j=i+1;j<ps.length;j++){const b=ps[j];if(b.out)continue;
+      const dx=b.x-a.x,dy=b.y-a.y,d2=dx*dx+dy*dy;
+      if(d2>=4*R*R)continue;
+      const d=Math.sqrt(d2)||1e-6,nx=dx/d,ny=dy/d;
+      const rv=(b.vx-a.vx)*nx+(b.vy-a.vy)*ny;
+      if(rv<0){const k=-(1+E)*rv/2;a.vx-=k*nx;a.vy-=k*ny;b.vx+=k*nx;b.vy+=k*ny;if(ev)ev.hit=Math.max(ev.hit||0,-rv);}
+      const o=(2*R-d)/2;a.x-=nx*o;a.y-=ny*o;b.x+=nx*o;b.y+=ny*o;
+    }
+  }
+  // a piece whose centre leaves the board falls off
+  for(const a of ps)if(!a.out&&(a.x<0||a.x>8||a.y<0||a.y>8)){a.out=true;if(ev)(ev.out=ev.out||[]).push(a);}
+}
+const moving=ps=>ps.some(a=>!a.out&&(a.vx||a.vy));
+function simulate(ps,i,vx,vy){
+  const s=ps.map(a=>({p:a.p,x:a.x,y:a.y,vx:0,vy:0,out:a.out}));
+  s[i].vx=vx;s[i].vy=vy;
+  for(let n=0;n<4000&&moving(s);n++)physStep(s);
+  return s;
+}
+
+/* ---------- match ---------- */
+// Each player has a row level: 0 = own back rank. A round win moves your row one step forward.
+// Once the rows touch (levels add up to 6), the winner steps forward and the loser is pushed back; pushed past the edge = match lost.
+let G=null,screen='home';
+const cur=()=>G.players[G.turn];
+const who=P=>P.name;
+const fullName=P=>P.bot?`${P.name} (${LEVELS[G.level]})`:P.name; // the level shows only in the player lists
+const flipped=()=>!!NET&&NET.seat===1; // seat 1 sees the board turned round, own pieces at the bottom
+// your seat: against the bot you are always white (seat 0); online it's the seat you took. Your side is always drawn at the bottom.
+const me=()=>NET?NET.seat:0;
+const isMine=()=>G&&G.phase==='aim'&&(NET?G.turn===NET.seat:!cur().bot);
+const touching=()=>G.players[0].lv+G.players[1].lv>=6;
+const left=p=>G.pieces.filter(a=>a.p===p&&!a.out).length;
+const rowOf=p=>p===0?G.players[0].lv:7-G.players[1].lv; // board row (0 = rank 1)
+function addLog(t){G.log.unshift(t);G.log=G.log.slice(0,60);}
+function newMatch(level){
+  const bot='Бот';
+  NET=null;
+  G={players:[{name:'Ты',bot:false,lv:0},{name:bot,bot:true,lv:0}],level,turn:0,round:1,log:[],phase:'aim',again:false,lostBy:null,ver:0};
+  setupRound();
+  addLog(`Раунд 1. Первым ходит ${who(cur())}.`);
+  screen='game';render();maybeBot();
+}
+function setupRound(){
+  G.pieces=[];
+  [0,1].forEach(p=>{const y=rowOf(p)+0.5;for(let i=0;i<8;i++)G.pieces.push({p,x:i+0.5,y,vx:0,vy:0,out:false});});
+  G.phase='aim';G.again=false;G.lostBy=null;G.shot=null;
+  buildPieces();
+}
+function shoot(i,ang,pw){
+  if(!G||G.phase!=='aim')return;
+  const a=G.pieces[i];
+  a.vx=Math.cos(ang)*VMAX*pw;a.vy=Math.sin(ang)*VMAX*pw;
+  G.shot={p:G.turn,i,vx:a.vx,vy:a.vy,before:G.pieces.map(b=>b.out)};
+  G.shotSeq=(G.shotSeq||0)+1;G.phase='moving';G.lostBy=null;clearAim();
+  sfx('step',0.5+pw*0.5);
+  sync();runLoop();
+}
+let loopId=0;
+// the shooter's screen settles the shot and decides what happens; the other player's screen only plays it back (remote=true)
+function runLoop(remote){
+  const id=++loopId,g=G;let last=performance.now(),acc=0,lastHit=0;
+  const frame=t=>{
+    if(id!==loopId||g!==G)return;
+    acc+=Math.min(0.05,(t-last)/1000);last=t;
+    const ev={};
+    const flying=()=>G.pieces.some(a=>a.out&&a.fallAt&&t-a.fallAt<700&&(a.vx||a.vy));
+    while(acc>=DT&&(moving(G.pieces)||flying())){physStep(G.pieces,ev);acc-=DT;}
+    if(ev.out)ev.out.forEach(a=>{a.fallAt=t;});
+    if(ev.hit>0.4&&t-lastHit>45){lastHit=t;sfx('step',Math.min(1,0.25+ev.hit/7));}
+    if(ev.out)ev.out.forEach(()=>sfx('capture'));
+    paintPieces();
+    if(moving(G.pieces)||flying())requestAnimationFrame(frame);
+    else if(remote)replayDone();
+    else{acc=0;setTimeout(()=>{if(id===loopId&&g===G)resolveShot();},350);}
+  };
+  requestAnimationFrame(frame);
+}
+function resolveShot(){
+  const S=G.shot,me=S.p,opp=1-me,nm=who(G.players[me]);
+  const lost=G.pieces.filter((a,i)=>a.out&&!S.before[i]);
+  const enemy=lost.filter(a=>a.p===opp).length,own=lost.filter(a=>a.p===me).length;
+  const parts=[];
+  if(enemy)parts.push(`выбивает ${enemy} ${plural(enemy,'шашку','шашки','шашек')}`);
+  if(own)parts.push(`теряет ${own===1?'свою':own+' свои'} ${plural(own,'шашку','шашки','шашек')}`);
+  addLog(`${nm}: ${parts.length?parts.join(' и '):'мимо'}.`);
+  const l0=left(me),l1=left(opp);
+  if(!l0&&!l1){drawRound(opp);return;}
+  if(!l0||!l1){endRound(l0?me:opp);return;}
+  const was=G.turn;
+  if(enemy&&!own){G.again=true;sfx('six');}
+  else{
+    G.again=false;G.turn=opp;
+    if(own)G.lostBy=me;
+    if(!NET&&G.players[was].bot&&!cur().bot)sfx('turn');
+  }
+  G.phase='aim';G.shot=null;sync();maybeBot();
+}
+function endRound(w){
+  const l=1-w,P=G.players,wasTouching=touching();
+  P[w].lv++;if(wasTouching)P[l].lv--;
+  G.lastRound={w,touching:wasTouching};G.turn=w;
+  if(P[l].lv<0){
+    P[l].lv=0;G.phase='over';G.winner=w;
+    addLog(`${who(P[w])} выталкивает соперника с доски и выигрывает матч!`);
+    sync();sfx(w===me()?'win':'lose');return;
+  }
+  addLog(`Раунд ${G.round} за: ${who(P[w])}.`);
+  G.phase='roundover';sync();if(w===me())sfx('home');
+}
+// nobody left on the board: rows stay where they were, the other side starts the replay
+function drawRound(starter){
+  G.lastRound={w:-1};G.turn=starter;
+  addLog(`Раунд ${G.round}: ничья.`);
+  G.phase='roundover';sync();
+}
+function nextRound(){
+  if(!G||G.phase!=='roundover')return;
+  G.round++;setupRound();
+  addLog(`Раунд ${G.round}. Первым ходит ${who(cur())}.`);
+  sync();maybeBot();
+}
+
+/* ---------- bot ---------- */
+const gauss=()=>{let u=0,v=0;while(!u)u=Math.random();while(!v)v=Math.random();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);};
+const pick=a=>a[Math.floor(Math.random()*a.length)];
+function scoreShot(i,ang,pw){
+  const me=G.pieces[i].p,s=simulate(G.pieces,i,Math.cos(ang)*VMAX*pw,Math.sin(ang)*VMAX*pw);
+  let enemy=0,own=0,foesLeft=0,mineLeft=0,safety=0;
+  s.forEach((a,k)=>{
+    const was=G.pieces[k].out;
+    if(a.p===me){if(a.out){if(!was)own++;}else{mineLeft++;const d=Math.min(a.x,8-a.x,a.y,8-a.y);if(d<0.8)safety-=1.5*(0.8-d);}}
+    else if(a.out){if(!was)enemy++;}else foesLeft++;
+  });
+  let sc=enemy*10-own*13+safety-pw*0.3;
+  if(enemy&&!own)sc+=4;              // keeps the turn
+  if(!foesLeft&&mineLeft)sc+=200;    // wins the round
+  if(!mineLeft)sc-=200;
+  return sc;
+}
+function botShot(){
+  const me=G.turn,lvl=G.level;
+  const mine=[],foes=[];
+  G.pieces.forEach((a,i)=>{if(a.out)return;(a.p===me?mine:foes).push(i);});
+  const dist=(i,j)=>Math.hypot(G.pieces[i].x-G.pieces[j].x,G.pieces[i].y-G.pieces[j].y);
+  const angTo=(i,x,y)=>Math.atan2(y-G.pieces[i].y,x-G.pieces[i].x);
+  if(lvl==='easy'){
+    // any piece at the nearest or a random target, rough aim and power
+    const s=pick(mine),t=Math.random()<0.6?foes.slice().sort((a,b)=>dist(s,a)-dist(s,b))[0]:pick(foes);
+    return{i:s,ang:angTo(s,G.pieces[t].x,G.pieces[t].y)+gauss()*0.11,pw:0.45+Math.random()*0.55};
+  }
+  const ded=lvl==='ded';
+  const offs=ded?[-1.1,-0.55,0,0.55,1.1]:[0];       // where on the target to hit: centre or a cut to either side
+  const pws=ded?[0.35,0.5,0.65,0.82,1]:[0.5,0.72,0.95];
+  const cands=[];
+  mine.forEach(s=>{
+    const targets=ded?foes:foes.slice().sort((a,b)=>dist(s,a)-dist(s,b)).slice(0,2);
+    targets.forEach(t=>{
+      const T=G.pieces[t],S=G.pieces[s],d=Math.hypot(T.x-S.x,T.y-S.y)||1,px=-(T.y-S.y)/d,py=(T.x-S.x)/d;
+      offs.forEach(k=>{const ang=angTo(s,T.x+px*k*R,T.y+py*k*R);pws.forEach(pw=>cands.push({i:s,ang,pw,sc:scoreShot(s,ang,pw)}));});
+    });
+  });
+  cands.sort((a,b)=>b.sc-a.sc);
+  let best=cands[0];
+  if(ded){
+    // the grandpa checks how forgiving his best few shots are, and takes the one that works even when the hand shakes a little
+    best=cands.slice(0,6).map(c=>{let t=c.sc;for(let k=0;k<4;k++)t+=scoreShot(c.i,c.ang+gauss()*0.02,Math.min(1,c.pw*(1+gauss()*0.04)));return{...c,avg:t/5};})
+      .sort((a,b)=>b.avg-a.avg)[0];
+  }
+  const sa=ded?0.012:0.05,sp=ded?0.03:0.08;
+  return{i:best.i,ang:best.ang+gauss()*sa,pw:Math.max(0.2,Math.min(1,best.pw*(1+gauss()*sp)))};
+}
+let botTimer=null;
+function maybeBot(){
+  clearTimeout(botTimer);
+  if(NET||!G||G.phase!=='aim'||!cur().bot)return;
+  const g=G;
+  botTimer=setTimeout(async()=>{
+    if(g!==G||G.phase!=='aim')return;
+    const s=botShot();
+    // pull back like a person would, then wait for the swinging arrow to come round to the chosen angle and let go
+    const off=(Math.random()*2-1)*SWEEP*0.85,centre=s.ang-off,t0=performance.now()-Math.random()*SWEEP_T*1000;
+    const now=()=>sweepOff((performance.now()-t0)/1000);
+    G.pieces.forEach((_,i)=>pieceEls[i]&&pieceEls[i].classList.toggle('grab',i===s.i));
+    const steps=14;
+    for(let k=1;k<=steps;k++){if(g!==G)return;drawAim(s.i,centre,now(),s.pw*k/steps);await wait(30);}
+    let prev=now()-off;
+    for(const end=performance.now()+3*SWEEP_T*1000;performance.now()<end;){
+      await wait(16);if(g!==G)return;
+      const o=now();drawAim(s.i,centre,o,s.pw);
+      if(Math.sign(o-off)!==Math.sign(prev))break;prev=o-off;
+    }
+    if(g!==G||G.phase!=='aim')return;
+    pieceEls[s.i]&&pieceEls[s.i].classList.remove('grab');
+    shoot(s.i,s.ang,s.pw);
+  },G.again?650:900);
+}
+
+/* ---------- sound ---------- */
+const SOUND={on:store.get('chapaev-sound')!=='off',ctx:null,buf:{},loading:{}};
+const SOUND_NAMES=['step','capture','six','home','turn','win','lose','tap','send','message'];
+function audioCtx(){
+  if(SOUND.ctx)return SOUND.ctx;
+  const C=window.AudioContext||window.webkitAudioContext;
+  if(C)SOUND.ctx=new C();
+  return SOUND.ctx;
+}
+function loadSound(name){
+  const ctx=audioCtx();if(!ctx)return null;
+  if(!SOUND.loading[name])SOUND.loading[name]=fetch('sounds/'+name+'.mp3').then(r=>r.arrayBuffer())
+    .then(a=>new Promise((res,rej)=>ctx.decodeAudioData(a,res,rej))).then(b=>{SOUND.buf[name]=b;}).catch(()=>{});
+  return SOUND.loading[name];
+}
+function sfx(name,vol){
+  if(!SOUND.on)return;
+  const ctx=audioCtx();if(!ctx)return;
+  if(ctx.state==='suspended')ctx.resume().catch(()=>{});
+  const b=SOUND.buf[name];
+  if(!b){loadSound(name);return;}
+  const src=ctx.createBufferSource();src.buffer=b;
+  if(vol!=null&&vol<1){const g=ctx.createGain();g.gain.value=vol;src.connect(g);g.connect(ctx.destination);}else src.connect(ctx.destination);
+  src.start();
+}
+SOUND_NAMES.forEach(loadSound);
+document.addEventListener('pointerdown',()=>{const c=audioCtx();if(c&&c.state==='suspended')c.resume().catch(()=>{});},{passive:true});
+const soundBtn=document.getElementById('soundBtn');
+function paintSound(){document.getElementById('soundIco').src=SOUND.on?'assets/sound-on.svg':'assets/sound-off.svg';soundBtn.setAttribute('aria-label',SOUND.on?'Выключить звук':'Включить звук');}
+soundBtn.addEventListener('click',()=>{SOUND.on=!SOUND.on;store.set('chapaev-sound',SOUND.on?'on':'off');paintSound();if(SOUND.on)sfx('tap');});
+document.addEventListener('click',e=>{const b=e.target.closest('button,summary');if(!b||b.disabled||b===soundBtn||b.id==='chatSend')return;sfx('tap');},true);
+paintSound();
+
+/* ---------- background music (same track and loop as «Уголки») ---------- */
+const MUSIC={on:store.get('chapaev-music')!=='off',buf:null,src:null,gain:null,loading:null,wanted:false,volume:0.25};
+const musicBtn=document.getElementById('musicBtn');
+function loadMusic(){
+  const ctx=audioCtx();if(!ctx||MUSIC.loading)return;
+  MUSIC.loading=fetch('sounds/music.mp3').then(r=>r.arrayBuffer()).then(a=>new Promise((res,rej)=>ctx.decodeAudioData(a,res,rej)))
+    .then(b=>{MUSIC.buf=b;if(MUSIC.wanted)startMusic();}).catch(()=>{});
+}
+const MUSIC_LEN=3233684/48000,MUSIC_DELAY=528/48000;
+function musicBounds(b){
+  if(b.duration-MUSIC_LEN>0.02)return[MUSIC_DELAY,MUSIC_DELAY+MUSIC_LEN];
+  return[0,Math.min(MUSIC_LEN,b.duration)];
+}
+function startMusic(){
+  MUSIC.wanted=true;
+  const ctx=audioCtx();if(!ctx||!MUSIC.on||MUSIC.src)return;
+  if(!MUSIC.buf){loadMusic();return;}
+  if(ctx.state==='suspended')ctx.resume().catch(()=>{});
+  const g=ctx.createGain(),src=ctx.createBufferSource(),[a,b]=musicBounds(MUSIC.buf);
+  g.gain.setValueAtTime(0,ctx.currentTime);g.gain.linearRampToValueAtTime(MUSIC.volume,ctx.currentTime+1.5);
+  src.buffer=MUSIC.buf;src.loop=true;src.loopStart=a;src.loopEnd=b;
+  src.connect(g);g.connect(ctx.destination);src.start(0,a);
+  MUSIC.src=src;MUSIC.gain=g;
+}
+function stopMusic(){
+  if(!MUSIC.src)return;
+  const ctx=audioCtx(),src=MUSIC.src,g=MUSIC.gain,t=ctx.currentTime;MUSIC.src=null;
+  g.gain.cancelScheduledValues(t);g.gain.setValueAtTime(g.gain.value,t);g.gain.linearRampToValueAtTime(0,t+0.4);src.stop(t+0.45);
+}
+function paintMusic(){document.getElementById('musicIco').src=MUSIC.on?'assets/music-on.svg':'assets/music-off.svg';musicBtn.setAttribute('aria-label',MUSIC.on?'Выключить музыку':'Включить музыку');}
+musicBtn.addEventListener('click',()=>{MUSIC.on=!MUSIC.on;store.set('chapaev-music',MUSIC.on?'on':'off');paintMusic();MUSIC.on?startMusic():stopMusic();});
+document.addEventListener('pointerdown',()=>{if(MUSIC.on&&!MUSIC.src)startMusic();},{passive:true});
+document.addEventListener('visibilitychange',()=>{const c=SOUND.ctx;if(!c)return;document.hidden?c.suspend().catch(()=>{}):c.resume().catch(()=>{});});
+paintMusic();loadMusic();
+
+/* ---------- board ---------- */
+const boardEl=document.getElementById('board'),fieldEl=document.getElementById('field'),aimEl=document.getElementById('aim'),
+  sideEl=document.getElementById('side'),sideRest=document.getElementById('sideRest'),topNew=document.getElementById('topNew');
+for(let y=7;y>=0;y--)for(let x=0;x<8;x++){const el=document.createElement('div');el.className='sq '+((x+y)%2?'l':'d');boardEl.appendChild(el);}
+let pieceEls=[];
+function buildPieces(list){
+  pieceEls.forEach(el=>el.remove());
+  pieceEls=(list||G.pieces).map(a=>{
+    const c=COLORS[a.p],el=document.createElement('div');
+    el.className='pc';el.style.setProperty('--fill',c.fill);el.style.setProperty('--edge',c.edge);
+    fieldEl.appendChild(el);return el;
+  });
+  paintPieces(list);
+}
+function paintPieces(list){
+  (list||G.pieces).forEach((a,i)=>{const el=pieceEls[i];if(!el)return;
+    const f=flipped();el.style.left=((f?8-a.x:a.x)/8*100)+'%';el.style.top=((f?a.y:8-a.y)/8*100)+'%';
+    if(a.out&&!el.classList.contains('fall')){el.classList.add('fall');el.classList.remove('can','grab');}
+  });
+}
+function paintCan(){
+  const mine=isMine();
+  fieldEl.classList.toggle('play',!!G&&screen==='game');
+  if(!G)return;
+  G.pieces.forEach((a,i)=>pieceEls[i]&&pieceEls[i].classList.toggle('can',mine&&a.p===G.turn&&!a.out));
+}
+// aim: a dashed band back to where you pull, a faint fan showing the swing, and a short arrow that shows only the direction
+function drawAim(i,ang,off,pw,px,py){
+  const f=flipped(),a=G.pieces[i],X=x=>(f?8-x:x).toFixed(3),Y=y=>(f?y:8-y).toFixed(3),dx=Math.cos(ang),dy=Math.sin(ang);
+  const bx=px??a.x-dx*pw*PULL,by=py??a.y-dy*pw*PULL;
+  const r=R+AIM,fan=[];
+  for(let k=0;k<=16;k++){const t=ang-SWEEP+2*SWEEP*k/16;fan.push(X(a.x+Math.cos(t)*r)+','+Y(a.y+Math.sin(t)*r));}
+  const ux=Math.cos(ang+off),uy=Math.sin(ang+off);
+  const sx=a.x+ux*(R+0.08),sy=a.y+uy*(R+0.08),ex=a.x+ux*(r-0.2),ey=a.y+uy*(r-0.2);
+  // arrowhead: tip a little past the line's end, two corners either side of it
+  const tx=a.x+ux*(r+0.06),ty=a.y+uy*(r+0.06),hw=0.15,head=[[tx,ty],[ex-ux*0.06-uy*hw,ey-uy*0.06+ux*hw],[ex-ux*0.06+uy*hw,ey-uy*0.06-ux*hw]].map(([x,y])=>X(x)+','+Y(y)).join(' ');
+  aimEl.innerHTML=`<line x1="${X(a.x)}" y1="${Y(a.y)}" x2="${X(bx)}" y2="${Y(by)}" stroke="rgba(0,0,0,.4)" stroke-width=".05" stroke-dasharray=".12 .1" stroke-linecap="round"/>
+    <polyline points="${fan.join(' ')}" fill="none" stroke="rgba(0,0,0,.28)" stroke-width=".04" stroke-dasharray=".06 .08" stroke-linecap="round"/>
+    <line x1="${X(sx)}" y1="${Y(sy)}" x2="${X(ex)}" y2="${Y(ey)}" stroke="#000" stroke-width=".13" stroke-linecap="round"/>
+    <line x1="${X(sx)}" y1="${Y(sy)}" x2="${X(ex)}" y2="${Y(ey)}" stroke="var(--yellow)" stroke-width=".07" stroke-linecap="round"/>
+    <polygon points="${head}" fill="var(--yellow)" stroke="#000" stroke-width=".035" stroke-linejoin="round"/>`;
+}
+function clearAim(){aimEl.innerHTML='';}
+
+/* ---------- aiming by hand ---------- */
+// pull back = power and the centre of the swing; the arrow swings on its own, the shot goes wherever it points when you let go
+let drag=null;
+function toBoard(e){const r=fieldEl.getBoundingClientRect(),x=(e.clientX-r.left)/r.width*8,y=8-(e.clientY-r.top)/r.height*8;return flipped()?{x:8-x,y:8-y}:{x,y};}
+fieldEl.addEventListener('pointerdown',e=>{
+  if(!isMine()||drag)return;
+  const p=toBoard(e);let best=-1,bd=0.75;
+  G.pieces.forEach((a,i)=>{if(a.out||a.p!==G.turn)return;const d=Math.hypot(a.x-p.x,a.y-p.y);if(d<bd){bd=d;best=i;}});
+  if(best<0)return;
+  e.preventDefault();
+  // the swing starts at a random point, so you can't just release at the same rhythm every time
+  drag={i:best,id:e.pointerId,v:null,t0:performance.now()-Math.random()*SWEEP_T*1000};
+  try{fieldEl.setPointerCapture(e.pointerId);}catch(err){}
+  fieldEl.classList.add('dragging');pieceEls[best].classList.add('grab');
+  requestAnimationFrame(swingFrame);
+});
+function dragVec(e,i){
+  const a=G.pieces[i],p=toBoard(e),dx=a.x-p.x,dy=a.y-p.y,len=Math.hypot(dx,dy);
+  return{dx:dx/(len||1),dy:dy/(len||1),len,pw:Math.min(1,len/PULL),p};
+}
+const swingNow=()=>sweepOff((performance.now()-drag.t0)/1000);
+function swingFrame(){
+  if(!drag)return;
+  const v=drag.v;
+  if(v&&v.len>=0.3){
+    const a=G.pieces[drag.i],k=Math.min(v.len,PULL)/v.len;
+    drawAim(drag.i,Math.atan2(v.dy,v.dx),swingNow(),v.pw,a.x+(v.p.x-a.x)*k,a.y+(v.p.y-a.y)*k);
+  }else clearAim();
+  requestAnimationFrame(swingFrame);
+}
+fieldEl.addEventListener('pointermove',e=>{if(drag&&e.pointerId===drag.id)drag.v=dragVec(e,drag.i);});
+function endDrag(e,fire){
+  if(!drag||e.pointerId!==drag.id)return;
+  const off=swingNow(),d=drag;drag=null;fieldEl.classList.remove('dragging');pieceEls[d.i]&&pieceEls[d.i].classList.remove('grab');clearAim();
+  if(!fire||!isMine())return;
+  const v=dragVec(e,d.i);
+  if(v.len>=0.3)shoot(d.i,Math.atan2(v.dy,v.dx)+off,v.pw);
+}
+fieldEl.addEventListener('pointerup',e=>endDrag(e,true));
+fieldEl.addEventListener('pointercancel',e=>endDrag(e,false));
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&drag){const d=drag;drag=null;fieldEl.classList.remove('dragging');pieceEls[d.i].classList.remove('grab');clearAim();}});
+
+/* ---------- render ---------- */
+const ico=(c,s)=>`<span class="ico" style="--fill:${c.fill};--edge:${c.edge};--s:${s||20}px"></span>`;
+const filesEls=document.querySelectorAll('.lbl.files'),ranksEls=document.querySelectorAll('.lbl.ranks');
+function paintLabels(){
+  const f=flipped(),files=f?'hgfedcba':'abcdefgh',ranks=f?'12345678':'87654321';
+  filesEls.forEach(el=>el.innerHTML=[...files].map(c=>`<span>${c}</span>`).join(''));
+  ranksEls.forEach(el=>el.innerHTML=[...ranks].map(c=>`<span>${c}</span>`).join(''));
+}
+function render(){
+  if(!G){buildPieces(SHOWCASE);}
+  paintLabels();paintCan();renderSide();renderChat();
+  menuWrap.hidden=screen==='home';if(menuWrap.hidden)closeMenu();
+}
+// before a game the board shows the opening setup
+const SHOWCASE=[0,1].flatMap(p=>[...Array(8)].map((_,i)=>({p,x:i+0.5,y:p?7.5:0.5,out:false})));
+const rowName=p=>`${G.players[p].lv+1}-й ряд`;
+const rowAt=p=>`${G.players[p].lv+1}-м ряду`;
+function roundLine(){
+  const t=touching(),danger=G.players.findIndex(P=>P.lv===0);
+  let s=`Раунд ${G.round}`;
+  if(t)s+=` · <b>ряды сомкнулись</b>`;
+  if(t&&danger>=0)s+=danger===me()?' · проиграешь — вылетишь':` · ${esc(who(G.players[danger]))} на краю`;
+  return s;
+}
+function hintText(){
+  const nm=esc(who(cur()));
+  if(G.phase==='moving')return 'Шашки катятся…';
+  const lost=G.lostBy==null?'':G.lostBy===me()?'Твоя шашка улетела, ход переходит. ':`${esc(who(G.players[G.lostBy]))} теряет свою шашку, твой ход. `;
+  if(!isMine())return G.again?`${nm}: есть попадание, бьёт ещё раз.`:lost+`${nm} целится…`;
+  if(G.again)return '<b>Выбил!</b> Твоя шашка на месте, бей ещё раз.';
+  return lost+'Зажми свою шашку и тяни назад: чем дальше, тем сильнее. <b>Стрелка качается — отпускай, когда она смотрит куда надо.</b>';
+}
+function roundText(){
+  const M=me(),O=1-M;
+  if(G.lastRound.w<0)return `На доске никого не осталось. Ряды не меняются: ты на ${rowAt(M)}, ${esc(who(G.players[O]))} на ${rowAt(O)}. ${G.turn===M?'Первый ход твой.':`Первым ходит ${esc(who(cur()))}.`}`;
+  const {w,touching:t}=G.lastRound,P=G.players,l=1-w,mine=w===M;
+  if(mine)return t?`Ряды были сомкнуты: ты идёшь вперёд на ${rowName(w)}, ${esc(who(P[l]))} отступает на ${rowName(l)}. Первый ход твой.`
+    :`В следующем раунде встаёшь на ряд ближе, на ${rowName(w)}, и ходишь первым.`;
+  return t?`${esc(who(P[w]))} идёт вперёд, а ты отступаешь на ${rowName(l)}. Первым ходит ${esc(who(P[w]))}.`
+    :`${esc(who(P[w]))} встаёт на ряд ближе и ходит первым. Ты остаёшься на ${rowAt(l)}.`;
+}
+let openLog=false,openRules=false;
+const RULES_LIST=`<p class="goal">Цель — вытолкнуть соперника с доски.</p>
+<ol class="rules">
+  <li>У каждого 8 шашек на своём первом ряду. Бьёте по очереди.</li>
+  <li>Зажми шашку и тяни назад: чем дальше, тем сильнее удар. Стрелка качается туда-сюда — шашка полетит туда, куда она смотрит в момент, когда отпустишь.</li>
+  <li>Выбил чужую, а твоя осталась на доске — бьёшь ещё раз.</li>
+  <li>Своя улетела — она выбывает, ход переходит сопернику.</li>
+  <li>Раунд выигрывает тот, у кого остались шашки. В следующем раунде он встаёт на ряд ближе и ходит первым. Если с доски слетели все шашки, это ничья: ряды не меняются.</li>
+  <li>Когда ряды сомкнулись, победитель раунда идёт вперёд, а проигравший отступает. Кого вытолкнули за край, тот проиграл.</li>
+</ol>`;
+const rulesCard=()=>`<details class="card" id="rulesBox"${openRules?' open':''}><summary>Правила<span class="chev" aria-hidden="true"></span></summary>${RULES_LIST}</details>`;
+function bindDetails(){
+  const r=document.getElementById('rulesBox');if(r)r.addEventListener('toggle',()=>{openRules=r.open;});
+  const l=document.getElementById('logBox');if(l)l.addEventListener('toggle',()=>{openLog=l.open;});
+}
+function renderSide(){
+  if(screen!=='game'||!G)sideRest.innerHTML='';
+  if(screen==='home')return renderHome();
+  if(screen==='join')return renderJoin();
+  if(screen==='error')return renderError();
+  if(screen==='lobby'||!G)return renderLobby();
+  const P=cur(),col=COLORS[G.turn];
+  let top;
+  if(G.phase==='over'){
+    const win=G.winner===me();
+    top=`<div class="card result-card${win?' win':''}">
+      <p class="turn result-title">${win?'Матч окончен. Ты выиграл-а! 🎉':`Матч окончен. ${esc(who(G.players[G.winner]))} выталкивает тебя с доски 🥺`}</p>
+      <hr class="rule">
+      <div class="players">${[G.winner,1-G.winner].map((i,k)=>`<div class="prow">${ico(COLORS[i])}<span class="nm">${esc(fullName(G.players[i]))}</span><span class="st">${k+1} место</span></div>`).join('')}</div>
+      ${againButton()}</div>`;
+  }else if(G.phase==='roundover'){
+    const win=G.lastRound.w===me(),draw=G.lastRound.w<0;
+    top=`<div class="card result-card${win?' win':''}">
+      <p class="turn result-title">${draw?'Ничья 🤝':win?'Раунд за тобой! 🎉':`Раунд за: ${esc(who(G.players[G.lastRound.w]))}`}</p>
+      <div class="hint">${roundText()}</div>
+      <button class="btn-main" id="next">Следующий раунд</button></div>`;
+  }else{
+    const mine=NET?G.turn===NET.seat:!P.bot;
+    top=`<div class="card turn-card${mine?'':' calm'}">
+      <div class="turn">${ico(col,24)}${mine?'Твой ход':'Ход: '+esc(who(P))}</div>
+      <p class="round-lab">${roundLine()}</p>
+      <div class="hint" aria-live="polite">${hintText()}</div>
+    </div>`;
+  }
+  sideEl.innerHTML=top;
+  sideRest.innerHTML=`
+    <div class="card"><div class="players">${G.players.map((Q,i)=>`<div class="prow${i===G.turn&&(G.phase==='aim'||G.phase==='moving')?' active':''}">${ico(COLORS[i])}
+        <span class="nm">${esc(fullName(Q))}${NET&&i===NET.seat?' (ты)':''}</span><span class="st">${G.phase==='over'?'':rowName(i)+' · '}на доске ${left(i)}</span></div>`).join('')}</div></div>
+    <details class="card" id="logBox"${openLog?' open':''}><summary>Ходы<span class="chev" aria-hidden="true"></span></summary><ul class="log">${G.log.map(l=>`<li>${esc(l)}</li>`).join('')}</ul></details>
+    ${rulesCard()}`;
+  bindDetails();
+  document.getElementById('next')?.addEventListener('click',nextRound);
+  document.getElementById('again')?.addEventListener('click',()=>{
+    if(NET){fb.set(rref('state/rematch/'+NET.seat),true);return;} // online: vote, the new match starts once both have
+    newMatch(G.level);
+  });
+}
+function goHome(){clearTimeout(botTimer);loopId++;drag=null;clearAim();leaveRoom();G=null;screen='home';render();}
+topNew.addEventListener('click',()=>{closeMenu();goHome();});
+const menuWrap=document.getElementById('menuWrap'),menuBtn=document.getElementById('menuBtn'),menuEl=document.getElementById('menu');
+function closeMenu(){menuEl.hidden=true;menuBtn.setAttribute('aria-expanded','false');}
+menuBtn.addEventListener('click',e=>{e.stopPropagation();const open=menuEl.hidden;menuEl.hidden=!open;menuBtn.setAttribute('aria-expanded',open);if(open)topNew.focus();});
+document.addEventListener('click',e=>{if(!menuEl.hidden&&!menuWrap.contains(e.target))closeMenu();});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!menuEl.hidden){closeMenu();menuBtn.focus();}});
+
+let home={error:'',mode:'bot',level:LEVELS[store.get('chapaev-level')]?store.get('chapaev-level'):'mid'};
+function renderHome(){
+  sideEl.innerHTML=`<form class="card main" id="homeForm">
+    <p class="card-title">Новая игра</p>
+    <hr class="rule">
+    <div class="rows">
+      <div class="row"><span class="lab">Играть:</span><div class="seg" role="group" aria-label="Режим">
+        <button type="button" data-mode="bot">С ботом</button>
+        <button type="button" data-mode="friends">С другом</button></div></div>
+      <div class="row" id="levelRow"><span class="lab">Бот:</span><div class="seg" role="group" aria-label="Сложность">${Object.entries(LEVELS).map(([k,v])=>`<button type="button" data-level="${k}">${v}</button>`).join('')}</div></div>
+      <div class="row" id="nameRow"><label class="lab" for="name">Твое имя:</label><input type="text" id="name" maxlength="20" autocomplete="nickname" value="${esc(store.get('chapaev-name'))}" placeholder="Введи имя"></div>
+    </div>
+    <div class="stack">
+      <p class="err" id="homeErr" hidden></p>
+      <button class="btn-main" type="submit" id="start"></button>
+      <p class="note" id="homeNote"></p>
+    </div></form>
+    ${rulesCard()}`;
+  bindDetails();
+  const errEl=document.getElementById('homeErr'),nameEl=document.getElementById('name');
+  const LEVEL_NOTE={easy:'Бот бьёт куда попало и часто мажет.',mid:'Бот выбирает удобную цель, но иногда промахивается.',ded:'Дед прикидывает десятки ударов и почти не мажет. Держись.'};
+  const update=()=>{
+    const f=home.mode==='friends';
+    sideEl.querySelectorAll('[data-mode]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.mode===home.mode));
+    sideEl.querySelectorAll('[data-level]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.level===home.level));
+    document.getElementById('levelRow').hidden=f;
+    document.getElementById('nameRow').hidden=!f;
+    const btn=document.getElementById('start');
+    btn.textContent=f?'Создать игру':'Начать игру';btn.disabled=false;
+    document.getElementById('homeNote').textContent=f?'Создадим игру и дадим ссылку для друга. Игра начнётся, когда он зайдёт.':LEVEL_NOTE[home.level];
+    errEl.hidden=!home.error;errEl.textContent=home.error;
+  };
+  update();
+  sideEl.querySelectorAll('[data-mode]').forEach(b=>b.addEventListener('click',()=>{home.mode=b.dataset.mode;home.error='';update();}));
+  sideEl.querySelectorAll('[data-level]').forEach(b=>b.addEventListener('click',()=>{home.level=b.dataset.level;store.set('chapaev-level',home.level);update();}));
+  document.getElementById('name').addEventListener('input',e=>store.set('chapaev-name',e.target.value.trim()));
+  document.getElementById('homeForm').addEventListener('submit',async e=>{
+    e.preventDefault();
+    if(home.mode==='bot'){home.error='';newMatch(home.level);return;}
+    const name=nameEl.value.trim();
+    if(!name){home.error='Напиши имя, чтобы друг видел, с кем играет.';update();nameEl.focus();return;}
+    const btn=document.getElementById('start');btn.disabled=true;btn.textContent='Создаём игру…';
+    try{await createRoom(name);}catch(err){home.error=netError(err);btn.disabled=false;update();}
+  });
+}
+
+/* ---------- chat (games with a friend) ---------- */
+const EMOJI=['😀','😂','😍','😎','🤔','😮','😢','😡','👍','👎','👏','🙏','🎉','🔥','🍀','💥','💪','🙈'];
+const chatEl=document.getElementById('chat'),chatList=document.getElementById('chatList'),chatForm=document.getElementById('chatForm'),
+  chatInput=document.getElementById('chatInput'),emojiBtn=document.getElementById('emojiBtn'),emojiPop=document.getElementById('emojiPop');
+let chatKey='',chatSeenCount=-1; // -1 = history not loaded yet, so old messages don't ding
+const hhmm=ts=>{if(!ts)return '';const d=new Date(ts);return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');};
+function chatMessages(){
+  const c=(NET&&NET.data&&NET.data.chat)||{};
+  return Object.values(c).filter(m=>m&&m.text).sort((a,b)=>(a.ts||0)-(b.ts||0));
+}
+function renderChat(){
+  const show=!!(NET&&NET.data&&NET.data.state);
+  chatEl.hidden=!show;chatBtn.hidden=!show;if(!show){closeChat();return;}
+  paintBadge();
+  const list=chatMessages(),key=list.length+':'+(list.length?list[list.length-1].ts:0);
+  if(key===chatKey)return;chatKey=key; // nothing new: leave the list (and its scroll position) alone
+  if(chatSeenCount>=0&&list.length>chatSeenCount&&!isMineMsg(list[list.length-1]))sfx('message');
+  chatSeenCount=list.length;
+  const atBottom=chatList.scrollHeight-chatList.scrollTop-chatList.clientHeight<30;
+  chatList.innerHTML=list.length?list.map(m=>{const c=COLORS[m.color]||COLORS[0];
+    return `<li class="msg"><div class="msg-head">${ico(c,14)}<span>${esc(m.name)}</span><span class="msg-time">${hhmm(m.ts)}</span></div><div class="msg-text">${esc(m.text)}</div></li>`;}).join('')
+    :'<li class="chat-empty">Пока тихо. Напиши первым!</li>';
+  if(atBottom||list.length<=1)chatList.scrollTop=chatList.scrollHeight;
+}
+chatForm.addEventListener('submit',e=>{
+  e.preventDefault();
+  const text=chatInput.value.trim().slice(0,300);if(!text||!NET||!G)return;
+  chatInput.value='';syncSend();closeEmoji();sfx('send');
+  const mine=G.players[NET.seat];
+  fb.push(rref('chat'),{uid:fb.uid,name:who(mine),color:NET.seat,text,ts:fb.serverTimestamp()}).catch(()=>{chatInput.value=text;syncSend();});
+  chatList.scrollTop=chatList.scrollHeight;
+});
+const chatSend=document.getElementById('chatSend');
+function syncSend(){chatSend.disabled=!chatInput.value.trim();}
+chatInput.addEventListener('input',syncSend);
+emojiPop.innerHTML=EMOJI.map(e=>`<button type="button" data-emoji="${e}" aria-label="${e}">${e}</button>`).join('');
+function closeEmoji(){emojiPop.hidden=true;emojiBtn.setAttribute('aria-expanded','false');}
+emojiBtn.addEventListener('click',e=>{e.stopPropagation();const open=emojiPop.hidden;emojiPop.hidden=!open;emojiBtn.setAttribute('aria-expanded',open);});
+emojiPop.addEventListener('click',e=>{
+  const b=e.target.closest('[data-emoji]');if(!b)return;
+  const i=chatInput.selectionStart??chatInput.value.length,j=chatInput.selectionEnd??i;
+  chatInput.value=(chatInput.value.slice(0,i)+b.dataset.emoji+chatInput.value.slice(j)).slice(0,300);
+  chatInput.focus();const k=i+b.dataset.emoji.length;chatInput.setSelectionRange(k,k);syncSend();
+});
+document.addEventListener('click',e=>{if(!emojiPop.hidden&&!e.target.closest('.emoji-wrap'))closeEmoji();});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!emojiPop.hidden)closeEmoji();});
+// phones: header button opens the chat as a sheet; the badge counts messages from the other player newer than the last time you looked
+const chatBtn=document.getElementById('chatBtn'),chatBadge=document.getElementById('chatBadge'),chatClose=document.getElementById('chatClose'),backdrop=document.getElementById('sheetBackdrop');
+const sheetMode=()=>matchMedia('(max-width:680px)').matches;
+const seenKey=()=>'chapaev-seen-'+(NET?NET.code:'');
+const isMineMsg=m=>!!(fb&&m.uid===fb.uid);
+function markSeen(){const l=chatMessages();store.set(seenKey(),String(l.length?(l[l.length-1].ts||Date.now()):Date.now()));}
+function paintBadge(){
+  if(!sheetMode()||chatEl.classList.contains('open')){if(chatEl.classList.contains('open'))markSeen();chatBadge.hidden=true;return;}
+  const seen=+store.get(seenKey())||0,n=chatMessages().filter(m=>!isMineMsg(m)&&(m.ts||0)>seen).length;
+  chatBadge.hidden=!n;chatBadge.textContent=n>9?'9+':n;
+  chatBtn.setAttribute('aria-label',n?`Чат, новых сообщений: ${n}`:'Чат');
+}
+function openChat(){chatEl.classList.add('open');backdrop.hidden=false;chatBtn.setAttribute('aria-expanded','true');markSeen();paintBadge();chatList.scrollTop=chatList.scrollHeight;}
+function closeChat(){if(!chatEl.classList.contains('open'))return;chatEl.classList.remove('open');backdrop.hidden=true;chatBtn.setAttribute('aria-expanded','false');closeEmoji();paintBadge();}
+chatBtn.addEventListener('click',()=>chatEl.classList.contains('open')?closeChat():openChat());
+chatClose.addEventListener('click',closeChat);
+backdrop.addEventListener('click',closeChat);
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&chatEl.classList.contains('open')&&emojiPop.hidden)closeChat();});
+matchMedia('(max-width:680px)').addEventListener('change',()=>{if(!sheetMode())closeChat();paintBadge();});
+
+/* ---------- join, lobby, error screens ---------- */
+let joinInfo=null,joinError='';
+function renderJoin(){
+  if(!joinInfo){sideEl.innerHTML=`<div class="card main"><p class="note">Загружаем игру…</p></div>`;return;}
+  const list=Object.values(joinInfo.players||{}).sort((a,b)=>a.seat-b.seat),full=list.length>=2||joinInfo.state;
+  sideEl.innerHTML=`<form class="card main" id="joinForm">
+    <p class="card-title">Тебя зовут в игру</p>
+    <hr class="rule">
+    <div class="players">${[0,1].map(i=>{const p=list.find(x=>x.seat===i);
+      return `<div class="prow">${ico(COLORS[i])}<span class="nm">${p?esc(p.name):'<span class="free">свободно</span>'}</span></div>`;}).join('')}</div>
+    ${full?`<p class="err">В этой игре уже двое.</p><button type="button" class="btn-main" id="toHome">Начать свою игру</button>`:`
+    <div class="row"><label class="lab" for="name">Твое имя:</label><input type="text" id="name" maxlength="20" autocomplete="nickname" value="${esc(store.get('chapaev-name'))}" placeholder="Введи имя"></div>
+    <div class="stack">${joinError?`<p class="err">${esc(joinError)}</p>`:''}
+    <button class="btn-main" type="submit" id="join">Присоединиться</button></div>`}
+    </form>${rulesCard()}`;
+  bindDetails();
+  document.getElementById('toHome')?.addEventListener('click',goHome);
+  document.getElementById('joinForm').addEventListener('submit',async e=>{
+    e.preventDefault();
+    const name=document.getElementById('name').value.trim();store.set('chapaev-name',name);
+    if(!name){joinError='Напиши имя, чтобы соперник видел, с кем играет.';render();return;}
+    const btn=document.getElementById('join');btn.disabled=true;btn.textContent='Заходим…';
+    try{await joinRoom(params.get('room'),name);}
+    catch(err){if(err.message==='full'){joinInfo=await roomInfo(params.get('room'));}else joinError=netError(err);render();}
+  });
+}
+function renderLobby(){
+  const list=roomPlayers(),link=roomURL(NET.code);
+  sideEl.innerHTML=`<div class="card main">
+    <p class="card-title">Ждём соперника</p>
+    <hr class="rule">
+    <div class="big">${list.length} из 2</div>
+    <div class="players">${[0,1].map(i=>{const p=list.find(x=>x.seat===i);
+      return `<div class="prow">${ico(COLORS[i])}<span class="nm">${p?esc(p.name)+(i===NET.seat?' (ты)':''):'<span class="free">ждём…</span>'}</span></div>`;}).join('')}</div>
+    <div class="stack">
+      <div class="invite"><input type="text" id="invite" readonly value="${esc(link)}" aria-label="Ссылка-приглашение"><button id="copy">Скопировать</button>${navigator.share?'<button id="share">Отправить</button>':''}</div>
+      <p class="note">Отправь ссылку другу. Игра начнётся сама, когда он зайдёт.</p>
+    </div></div>`;
+  const inp=document.getElementById('invite');
+  document.getElementById('copy').addEventListener('click',e=>{
+    const b=e.currentTarget;
+    navigator.clipboard.writeText(link).then(()=>{b.textContent='Скопировано';},()=>{inp.select();b.textContent='Выделено';});
+  });
+  document.getElementById('share')?.addEventListener('click',()=>navigator.share({title:'Вышибалы',text:'Сыграем в вышибалы?',url:link}).catch(()=>{}));
+}
+let fatal='';
+function renderError(){
+  sideEl.innerHTML=`<div class="card main"><p class="card-title">Не получилось</p><hr class="rule"><p class="note" style="text-align:left">${esc(fatal)}</p><button class="btn-main" id="toHome">На главную</button></div>`;
+  document.getElementById('toHome').addEventListener('click',goHome);
+}
+async function boot(){
+  const code=params.get('room');
+  if(!code){screen='home';render();return;}
+  screen='join';render();
+  try{
+    const f=await connect();
+    joinInfo=await roomInfo(code);
+    if(!joinInfo){fatal='Такой игры нет. Проверь ссылку.';screen='error';render();return;}
+    const seats=joinInfo.seats||{};
+    const mine=Object.keys(seats).find(i=>seats[i]===f.uid);
+    if(mine!=null){enterRoom(code,+mine);return;} // back after a reload
+    render();
+  }catch(err){fatal=netError(err);screen='error';render();}
+}
+
+// test hook: chapaev.shoot(i, angle, power), chapaev.win() ends the round in your favour
+window.chapaev={get G(){return G},shoot,botShot,simulate,
+  draw(){G.pieces.forEach(a=>{a.out=true;});paintPieces();G.shot={p:0,before:G.pieces.map(()=>false)};resolveShot();},
+  win(){G.pieces.forEach(a=>{if(a.p===1)a.out=true;});paintPieces();G.shot={p:0,before:G.pieces.map(()=>false)};resolveShot();},
+  get NET(){return NET}};
+boot();
+</script>
+</body>
+</html>

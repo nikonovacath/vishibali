@@ -1,0 +1,64 @@
+{
+  "rules": {
+    "rooms": {
+      "$room": {
+        ".read": "auth != null",
+        "meta": {
+          ".write": "auth != null && !data.exists() && newData.child('host').val() === auth.uid",
+          ".validate": "newData.hasChildren(['size', 'host', 'created']) && newData.child('size').isNumber() && newData.child('size').val() >= 2 && newData.child('size').val() <= 4"
+        },
+        "seats": {
+          "$seat": {
+            ".write": "auth != null && !data.exists() && newData.val() === auth.uid && root.child('rooms').child($room).child('meta').exists()",
+            ".validate": "$seat.matches(/^[0-3]$/)"
+          }
+        },
+        "players": {
+          "$uid": {
+            ".write": "auth != null && auth.uid === $uid && root.child('rooms').child($room).child('seats').child(newData.child('seat').val() + '').val() === auth.uid",
+            ".validate": "newData.hasChildren(['name', 'seat']) && newData.child('name').isString() && newData.child('name').val().length <= 20 && newData.child('seat').isNumber()"
+          }
+        },
+        "state": {
+          ".write": "auth != null && root.child('rooms').child($room).child('players').child(auth.uid).exists()"
+        },
+        "chat": {
+          "$msg": {
+            ".write": "auth != null && !data.exists() && root.child('rooms').child($room).child('players').child(auth.uid).exists() && newData.child('uid').val() === auth.uid",
+            ".validate": "newData.hasChildren(['uid', 'name', 'color', 'text', 'ts']) && newData.child('text').isString() && newData.child('text').val().length > 0 && newData.child('text').val().length <= 300 && newData.child('name').isString() && newData.child('name').val().length <= 20 && newData.child('color').isNumber()"
+          }
+        }
+      }
+    },
+    "chapaev": {
+      "$room": {
+        ".read": "auth != null",
+        "meta": {
+          ".write": "auth != null && !data.exists() && newData.child('host').val() === auth.uid",
+          ".validate": "newData.hasChildren(['size', 'host', 'created']) && newData.child('size').val() === 2"
+        },
+        "seats": {
+          "$seat": {
+            ".write": "auth != null && !data.exists() && newData.val() === auth.uid && root.child('chapaev').child($room).child('meta').exists()",
+            ".validate": "$seat.matches(/^[01]$/)"
+          }
+        },
+        "players": {
+          "$uid": {
+            ".write": "auth != null && auth.uid === $uid && root.child('chapaev').child($room).child('seats').child(newData.child('seat').val() + '').val() === auth.uid",
+            ".validate": "newData.hasChildren(['name', 'seat']) && newData.child('name').isString() && newData.child('name').val().length <= 20 && newData.child('seat').isNumber()"
+          }
+        },
+        "state": {
+          ".write": "auth != null && root.child('chapaev').child($room).child('players').child(auth.uid).exists()"
+        },
+        "chat": {
+          "$msg": {
+            ".write": "auth != null && !data.exists() && root.child('chapaev').child($room).child('players').child(auth.uid).exists() && newData.child('uid').val() === auth.uid",
+            ".validate": "newData.hasChildren(['uid', 'name', 'color', 'text', 'ts']) && newData.child('text').isString() && newData.child('text').val().length > 0 && newData.child('text').val().length <= 300 && newData.child('name').isString() && newData.child('name').val().length <= 20 && newData.child('color').isNumber()"
+          }
+        }
+      }
+    }
+  }
+}
